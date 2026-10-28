@@ -1,95 +1,35 @@
-import jenkins.model.*
-import hudson.model.Job
-
 pipeline {
     agent any
 
     stages {
-
-        stage('Generate Build Dashboard') {
+        stage('Generate Dashboard') {
             steps {
                 script {
 
-                    // Change this to your top-level folder
-                    def rootFolderName = "Github-Atlassian"
+                    def jobs = [
+                        "Github-Atlassian"
+                    ]
 
-                    def rootFolder = Jenkins.instance.getItemByFullName(rootFolderName)
+                    def csv = "Job Name,Build Number,Status\n"
 
-                    if (rootFolder == null) {
-                        error("Folder not found: ${rootFolderName}")
+                    jobs.each { jobName ->
+
+                        def response = sh(
+                            script: """
+                            curl -s "${JENKINS_URL}/job/${jobName}/lastBuild/api/json"
+                            """,
+                            returnStdout: true
+                        ).trim()
+
+                        def json = readJSON text: response
+
+                        csv += "${jobName},${json.number},${json.result}\n"
                     }
 
-                    def csvContent = "Job Name,Branch,Build Number,Status,Build Time\n"
+                    writeFile file: "dashboard.csv", text: csv
 
-                    def success = 0
-                    def failed = 0
-                    def total = 0
-
-                    rootFolder.getAllItems(Job.class).each { job ->
-
-                        total++
-
-                        def build = job.getLastBuild()
-
-                        if (build == null) {
-                            csvContent += "\"${job.fullName}\",NO BUILDS,,,\n"
-                            return
-                        }
-
-                        def branch = "N/A"
-
-                        try {
-                            def env = build.getEnvironment(null)
-
-                            branch =
-                                env["BRANCH_NAME"] ?:
-                                env["GIT_BRANCH"] ?:
-                                env["gitlabBranch"] ?:
-                                env["SOURCE_BRANCH"] ?:
-                                "N/A"
-
-                        } catch(Exception ex) {
-                            branch = "N/A"
-                        }
-
-                        def status = build.getResult()?.toString() ?: "RUNNING"
-
-                        if (status == "SUCCESS") success++
-                        if (status == "FAILURE") failed++
-
-                        def buildTime = new Date(
-                            build.getTimeInMillis()
-                        ).format("yyyy-MM-dd HH:mm:ss")
-
-                        csvContent += "\"${job.fullName}\"," +
-                                      "\"${branch}\"," +
-                                      "\"${build.number}\"," +
-                                      "\"${status}\"," +
-                                      "\"${buildTime}\"\n"
-                    }
-
-                    // Summary Row
-                    csvContent += "\n"
-                    csvContent += "\"TOTAL JOBS\",\"${total}\",,,\n"
-                    csvContent += "\"SUCCESS\",\"${success}\",,,\n"
-                    csvContent += "\"FAILED\",\"${failed}\",,,\n"
-
-                    writeFile(
-                        file: "Jenkins_Build_Dashboard.csv",
-                        text: csvContent
-                    )
-
-                    echo "Dashboard generated successfully."
+                    archiveArtifacts artifacts: "dashboard.csv"
                 }
-            }
-        }
-
-        stage('Archive Report') {
-            steps {
-                archiveArtifacts(
-                    artifacts: 'Jenkins_Build_Dashboard.csv',
-                    fingerprint: true
-                )
             }
         }
     }
