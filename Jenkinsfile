@@ -14,7 +14,7 @@ pipeline {
 
                     jobs.each { jobName ->
 
-                        def response = sh(
+                        def response = bat(
                             script: """
                             curl -s "${JENKINS_URL}/job/${jobName}/lastBuild/api/json"
                             """,
