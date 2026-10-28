@@ -11,7 +11,7 @@ pipeline {
                 script {
 
                     // Change this to your top-level folder
-                    def rootFolderName = "Github-Atlassian"
+                    def rootFolderName = "TE-Connectivity"
 
                     def rootFolder = Jenkins.instance.getItemByFullName(rootFolderName)
 
